@@ -4,6 +4,8 @@ import org.magicghostvu.jenet.protocol.ENetProtocol
 import org.magicghostvu.jenet.protocol.ENetProtocolCommand
 import org.magicghostvu.jenet.protocol.ENetProtocolSendUnreliable
 import org.magicghostvu.jenet.protocol.ENetProtocolSendUnsequenced
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import java.net.InetSocketAddress
 import java.util.LinkedList
 
@@ -95,6 +97,8 @@ class Peer(val channelCount: Int) {
     var totalWaitingData: Long = 0;
 
 
+    private val logger: Logger = LoggerFactory.getLogger("peer-io")
+
     fun enqueueOutgoingCommand(
         command: ENetProtocol,
         packet: ENetPacket?,
@@ -168,6 +172,8 @@ class Peer(val channelCount: Int) {
             }
 
             outgoingCommands.add(outgoingCommand)
+        } else {
+            logger.warn("channel {} not exist", channelId)
         }
     }
 }
