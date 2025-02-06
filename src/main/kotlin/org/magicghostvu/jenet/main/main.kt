@@ -14,6 +14,8 @@ fun main() {
 
     logger.info("logger work")
 
+
+
     val udpChannel = DatagramChannel.open()
     udpChannel.configureBlocking(false)
     udpChannel.bind(InetSocketAddress(9900))
@@ -27,10 +29,8 @@ fun main() {
         selector.select(1)
         val selectedKeys = selector.selectedKeys()
         // selected key had only one reference all the time
-
         if (selectedKeys.isNotEmpty()) {
             val iter = selectedKeys.iterator()
-
             // why not use for each and clear after all
             while (iter.hasNext()) {
                 val key = iter.next()
@@ -38,15 +38,17 @@ fun main() {
                 iter.remove()
                 if (key.isValid && key.isReadable) {
                     val channelSend = key.channel() as DatagramChannel
-                    val numByteRead = channelSend.read(buffer)
 
-                    // allocate new byte array
-                    val bufferSendToLogic = ByteArray(numByteRead)
+                    // not block here
+                    val sourceOfData = channelSend.receive(buffer)
 
-                    val sourceOfData = channelSend.remoteAddress as InetSocketAddress
 
                     // change to read mode
                     buffer.flip()
+                    // allocate new byte array
+                    val bufferSendToLogic = ByteArray(buffer.remaining())
+
+
                     buffer.get(bufferSendToLogic)
 
                     //todo: send buffer read and address to logic engine
@@ -54,10 +56,17 @@ fun main() {
                     // same as host update
 
                     // clear all old data to next read
+                    logger.info("received {} bytes from {}", bufferSendToLogic.size, sourceOfData)
+
                     buffer.clear()
                 }
             }
         }
+        // dispatch event to logic engine
+        // new packet come, new peer connect, peer disconnect
+        // process command from out-side
+        // request disconnect peer, send packet to peer,
+        // broadcast packet to some peer
     }
 
 }
