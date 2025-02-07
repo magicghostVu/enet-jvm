@@ -8,7 +8,7 @@ sealed class ENetProtocol {
     }
 
     companion object {
-        val sizeOfAllChild: IntArray = intArrayOf(
+        private val sizeOfAllChild: IntArray = intArrayOf(
             0,
             8,
             48,

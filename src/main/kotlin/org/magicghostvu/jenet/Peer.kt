@@ -99,6 +99,8 @@ class Peer(val channelCount: Int) {
 
     private val logger: Logger = LoggerFactory.getLogger("peer-io")
 
+
+    // clone of enet_peer_queue_outgoing_command
     fun enqueueOutgoingCommand(
         command: ENetProtocol,
         packet: ENetPacket?,
@@ -112,8 +114,7 @@ class Peer(val channelCount: Int) {
         if (packet != null) {
             packet.referenceCount++
         }
-
-
+        setupOutgoingCommand(outgoingCommand)
         return outgoingCommand
     }
 

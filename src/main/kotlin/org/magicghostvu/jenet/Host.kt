@@ -1,10 +1,13 @@
 package org.magicghostvu.jenet
 
+import org.magicghostvu.jenet.protocol.ENetProtocolCommand
+import org.magicghostvu.jenet.protocol.ENetProtocolConnect
 import java.net.InetSocketAddress
 import kotlin.math.abs
 
 class Host(
-    val maximumPeers: Int, val numChannelPerPeer: Int,
+    val maximumPeers: Int,
+    val numChannelPerPeer: Int,
     val addressBind: InetSocketAddress?,
     val outgoingBandwidth: Int, //in case of server host, it should be 0 (un-limit)
     val incomingBandwidth: Int, //in case of server host, it should be 0 (un-limit)
@@ -41,42 +44,60 @@ class Host(
 
     fun connectToRemoteHost(
         hostAddress: InetSocketAddress,
-        numChannel: Int,
-        outGoingBandwidth: Int,// byte per second
-        incomingBandwidth: Int, // byte per second
+        channelCount: Int,
         data: Int,
     ): Peer {
         if (addressBind != null) {
             throw IllegalArgumentException("server host can not connect to other host")
         }
         require(
-            numChannel in ProtocolConstants.ENET_PROTOCOL_MINIMUM_CHANNEL_COUNT
+            channelCount in ProtocolConstants.ENET_PROTOCOL_MINIMUM_CHANNEL_COUNT
                     ..ProtocolConstants.ENET_PROTOCOL_MAXIMUM_CHANNEL_COUNT
         ) {
-            "num channel invalid: $numChannel"
+            "num channel invalid: $channelCount"
         }
-        val peer = Peer(numChannel)
-        peer.state = PeerState.ENET_PEER_STATE_CONNECTING
-        peer.address = hostAddress
-        peer.connectID = (++randomSeed).toUInt()
+        val currentPeer = Peer(channelCount)
+        currentPeer.state = PeerState.ENET_PEER_STATE_CONNECTING
+        currentPeer.address = hostAddress
+        currentPeer.connectID = (++randomSeed).toUInt()
 
         if (this.outgoingBandwidth == 0)
-            peer.windowSize = ProtocolConstants.ENET_PROTOCOL_MAXIMUM_WINDOW_SIZE.toUInt();
+            currentPeer.windowSize = ProtocolConstants.ENET_PROTOCOL_MAXIMUM_WINDOW_SIZE.toUInt();
         else {
             val t =
                 (this.outgoingBandwidth / EnetConstant.ENET_PEER_WINDOW_SIZE_SCALE) * ProtocolConstants.ENET_PROTOCOL_MINIMUM_WINDOW_SIZE.toInt();
-            peer.windowSize = t.toUInt()
+            currentPeer.windowSize = t.toUInt()
         }
 
 
-        if (peer.windowSize < ProtocolConstants.ENET_PROTOCOL_MINIMUM_WINDOW_SIZE)
-            peer.windowSize = ProtocolConstants.ENET_PROTOCOL_MINIMUM_WINDOW_SIZE;
-        else if (peer.windowSize > ProtocolConstants.ENET_PROTOCOL_MAXIMUM_WINDOW_SIZE)
-            peer.windowSize = ProtocolConstants.ENET_PROTOCOL_MAXIMUM_WINDOW_SIZE;
+        if (currentPeer.windowSize < ProtocolConstants.ENET_PROTOCOL_MINIMUM_WINDOW_SIZE)
+            currentPeer.windowSize = ProtocolConstants.ENET_PROTOCOL_MINIMUM_WINDOW_SIZE;
+        else if (currentPeer.windowSize > ProtocolConstants.ENET_PROTOCOL_MAXIMUM_WINDOW_SIZE)
+            currentPeer.windowSize = ProtocolConstants.ENET_PROTOCOL_MAXIMUM_WINDOW_SIZE;
 
 
+        val command = ENetProtocolConnect()
 
-        return peer
+        command.header.command =
+            (ENetProtocolCommand.ENET_PROTOCOL_COMMAND_CONNECT or ENetProtocolFlag.ENET_PROTOCOL_COMMAND_FLAG_ACKNOWLEDGE).toUByte();
+        command.header.channelID = (0xFF).toUByte();
+        command.outgoingPeerID = currentPeer.incomingPeerID;
+        command.incomingSessionID = currentPeer.incomingSessionID;
+        command.outgoingSessionID = currentPeer.outgoingSessionID;
+        command.mtu = (currentPeer.mtu);
+        command.windowSize = (currentPeer.windowSize);
+        command.channelCount = (channelCount.toUInt());
+        command.incomingBandwidth = this.incomingBandwidth.toUInt();
+        command.outgoingBandwidth = this.outgoingBandwidth.toUInt();
+        command.packetThrottleInterval = (currentPeer.packetThrottleInterval);
+        command.packetThrottleAcceleration = (currentPeer.packetThrottleAcceleration);
+        command.packetThrottleDeceleration = (currentPeer.packetThrottleDeceleration);
+        command.connectID = currentPeer.connectID;
+        command.data = data.toUInt();
+
+        currentPeer.enqueueOutgoingCommand(command, null, 0.toUInt(), 0.toUShort());
+
+        return currentPeer
     }
 
     companion object {
