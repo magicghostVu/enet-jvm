@@ -152,8 +152,8 @@ class Peer(val channelCount: Int) {
             outgoingCommand.roundTripTimeoutLimit = 0.toUInt();
             outgoingCommand.command.header.reliableSequenceNumber = outgoingCommand.reliableSequenceNumber;
 
-            val t = outgoingCommand.command.header.command.toInt() and ENetProtocolCommand.ENET_PROTOCOL_COMMAND_MASK
-            when (t) {
+            val checkCommandType = outgoingCommand.command.header.command.toInt() and ENetProtocolCommand.ENET_PROTOCOL_COMMAND_MASK
+            when (checkCommandType) {
                 ENetProtocolCommand.ENET_PROTOCOL_COMMAND_SEND_UNRELIABLE -> {
                     val internalCommand = outgoingCommand.command as ENetProtocolSendUnreliable
                     internalCommand.unreliableSequenceNumber = outgoingCommand.unreliableSequenceNumber;
