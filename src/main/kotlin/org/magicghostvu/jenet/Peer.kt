@@ -19,6 +19,7 @@ class Peer(val channelCount: Int) {
     var outgoingPeerID: UShort = 0.toUShort()
     var incomingPeerID: UShort = 0.toUShort()
 
+    // peer Id
     var connectID: UInt = 0.toUInt()
 
     var outgoingSessionID: UByte = 0.toUByte()
@@ -27,7 +28,7 @@ class Peer(val channelCount: Int) {
     lateinit var address: InetSocketAddress
 
 
-    var state: PeerState = PeerState.ENET_PEER_STATE_CONNECTING
+    var state: ENetPeerState = ENetPeerState.ENET_PEER_STATE_CONNECTING
 
     val channels: MutableMap<Int, EnetChannel> = mutableMapOf()
 
@@ -84,7 +85,7 @@ class Peer(val channelCount: Int) {
     val sentReliableCommands: LinkedList<Any> = LinkedList();
     val sentUnreliableCommands: LinkedList<Any> = LinkedList();
     val outgoingCommands: LinkedList<ENetOutgoingCommand> = LinkedList();
-    val dispatchedCommands: LinkedList<Any> = LinkedList();
+    val dispatchedCommands: LinkedList<ENetIncomingCommand> = LinkedList();
 
 
     var flags: UShort = 0.toUShort()
@@ -116,6 +117,45 @@ class Peer(val channelCount: Int) {
         }
         setupOutgoingCommand(outgoingCommand)
         return outgoingCommand
+    }
+
+    fun onConnect() {
+        if (this.state != ENetPeerState.ENET_PEER_STATE_CONNECTED && this.state != ENetPeerState.ENET_PEER_STATE_DISCONNECT_LATER) {
+            if (this.incomingBandwidth != 0.toUInt()) {
+                ++this.host.bandwidthLimitedPeers;
+            }
+            ++this.host.connectedPeers;
+        }
+    }
+
+    fun onDisconnect() {
+        if (this.state == ENetPeerState.ENET_PEER_STATE_CONNECTED || this.state == ENetPeerState.ENET_PEER_STATE_DISCONNECT_LATER) {
+            if (this.incomingBandwidth != 0.toUInt()) {
+                --this.host.bandwidthLimitedPeers;
+            }
+            --this.host.connectedPeers;
+        }
+    }
+
+    fun changeState(state: ENetPeerState) {
+        if (state == ENetPeerState.ENET_PEER_STATE_CONNECTED || state == ENetPeerState.ENET_PEER_STATE_DISCONNECT_LATER)
+            onConnect()
+        else
+            onDisconnect()
+
+        this.state = state;
+    }
+
+
+    fun receive(): Pair<ENetPacket, UByte>? {
+        if (dispatchedCommands.isEmpty())
+            return null;
+        val incomingCommand: ENetIncomingCommand = dispatchedCommands.removeFirst()
+
+        val channelId = incomingCommand.command.header.channelID
+        val packet = incomingCommand.packet;
+        totalWaitingData -= packet.dataLength
+        return Pair(packet, channelId)
     }
 
     fun setupOutgoingCommand(outgoingCommand: ENetOutgoingCommand) {
@@ -157,7 +197,8 @@ class Peer(val channelCount: Int) {
             outgoingCommand.roundTripTimeoutLimit = 0.toUInt();
             outgoingCommand.command.header.reliableSequenceNumber = outgoingCommand.reliableSequenceNumber;
 
-            val checkCommandType = outgoingCommand.command.header.command.toInt() and ENetProtocolCommand.ENET_PROTOCOL_COMMAND_MASK
+            val checkCommandType =
+                outgoingCommand.command.header.command.toInt() and ENetProtocolCommand.ENET_PROTOCOL_COMMAND_MASK
             when (checkCommandType) {
                 ENetProtocolCommand.ENET_PROTOCOL_COMMAND_SEND_UNRELIABLE -> {
                     val internalCommand = outgoingCommand.command as ENetProtocolSendUnreliable

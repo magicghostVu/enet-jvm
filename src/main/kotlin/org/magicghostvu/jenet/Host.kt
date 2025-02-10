@@ -1,6 +1,9 @@
 package org.magicghostvu.jenet
 
 import org.magicghostvu.jenet.event.EnetEvent
+import org.magicghostvu.jenet.event.EnetEventConnect
+import org.magicghostvu.jenet.event.EnetEventDisconnect
+import org.magicghostvu.jenet.event.EnetEventReceivePacket
 import org.magicghostvu.jenet.protocol.ENetProtocol
 import org.magicghostvu.jenet.protocol.ENetProtocolCommand
 import org.magicghostvu.jenet.protocol.ENetProtocolCommandHeader
@@ -37,7 +40,7 @@ class Host(
 
     var serviceTime: UInt = 0.toUInt();
 
-    val dispatchQueue: LinkedList<Any> = LinkedList()
+    val dispatchQueue: LinkedList<Peer> = LinkedList()
 
     var continueSending: Int = 0;
 
@@ -100,18 +103,18 @@ class Host(
     var connectedPeers: UInt = 0.toUInt();
 
 
-    var bandwidthLimitedPeers: UInt = 0.toUInt();
+    var bandwidthLimitedPeers: ULong = 0.toULong()
 
     /**< optional number of allowed peers from duplicate IPs, defaults to ENET_PROTOCOL_MAXIMUM_PEER_ID */
-    var duplicatePeers: UInt = 0.toUInt();
+    var duplicatePeers: ULong = 0.toULong()
 
 
     /**< the maximum allowable packet size that may be sent or received on a peer */
-    var maximumPacketSize: UInt = 0.toUInt();
+    var maximumPacketSize: ULong = 0.toULong()
 
 
     /**< the maximum aggregate amount of buffer space a peer may use waiting for packets to be delivered */
-    var maximumWaitingData: UInt = 0.toUInt();
+    var maximumWaitingData: ULong = 0.toULong()
 
 
     fun findNewPeerId(): Int? {
@@ -128,10 +131,86 @@ class Host(
     // blocking in timeoutReadMillis(maximum)
     // name same as origin host_service(timeOut)
     // but will return many events in a single update
-    fun hostService(timeoutReadMillis: Int): List<EnetEvent> {
+    fun hostService(timeoutReadMillis: Int): EnetEvent? {
+        val eventsGatheredIncomingCommand = protocolDispatchIncomingCommand()
+        if (eventsGatheredIncomingCommand != null) {
+            return eventsGatheredIncomingCommand
+        }
+        serviceTime = getTime()
+        var t = timeoutReadMillis.toUInt() + serviceTime
+
+        var waitCondition = 0;
+        do {
+
+        }while (waitCondition!=0)
+
+
         TODO()
     }
 
+
+    fun protocolDispatchIncomingCommand(): EnetEvent? {
+        val iter = dispatchQueue.iterator()
+        //val eventList = mutableListOf<EnetEvent>()
+        while (iter.hasNext()) {
+            val peer = iter.next()
+            iter.remove()
+
+            // do logic
+            val t = peer.flags.toInt() and (ENetProtocolFlag.ENET_PEER_FLAG_NEEDS_DISPATCH.inv())
+            peer.flags = t.toUShort()
+
+            when (val s = peer.state) {
+                ENetPeerState.ENET_PEER_STATE_CONNECTION_PENDING,
+                ENetPeerState.ENET_PEER_STATE_CONNECTION_SUCCEEDED,
+                    -> {
+                    peer.changeState(ENetPeerState.ENET_PEER_STATE_CONNECTED)
+                    val event = EnetEventConnect(peer.address, peer.eventData)
+                    return event
+                }
+
+                ENetPeerState.ENET_PEER_STATE_CONNECTED -> {
+                    if (peer.dispatchedCommands.isEmpty()) {
+                        continue
+                    }
+
+                    val packetAndChannelId = peer.receive()
+                    if (packetAndChannelId == null) {
+                        continue
+                    }
+                    val (p, channelId) = packetAndChannelId
+                    val event = EnetEventReceivePacket(peer.address, p.data, channelId)
+                    //eventList.add(event)
+
+                    if (peer.dispatchedCommands.isNotEmpty()) {
+                        val newFlag = peer.flags.toInt() or ENetProtocolFlag.ENET_PEER_FLAG_NEEDS_DISPATCH
+                        peer.flags = newFlag.toUShort()
+                        dispatchQueue.add(peer)
+                    }
+                    return event
+                }
+
+                ENetPeerState.ENET_PEER_STATE_ZOMBIE -> {
+                    recalculateBandwidthLimits = 1;
+                    val event = EnetEventDisconnect(peer.address, peer.eventData.toInt())
+                    idToPeer.remove(peer.connectID.toInt())
+                    return event
+                }
+
+                ENetPeerState.ENET_PEER_STATE_DISCONNECTED,
+                ENetPeerState.ENET_PEER_STATE_CONNECTING,
+                ENetPeerState.ENET_PEER_STATE_ACKNOWLEDGING_CONNECT,
+                ENetPeerState.ENET_PEER_STATE_DISCONNECT_LATER,
+                ENetPeerState.ENET_PEER_STATE_DISCONNECTING,
+                ENetPeerState.ENET_PEER_STATE_ACKNOWLEDGING_DISCONNECT,
+                    -> {
+                    break
+                }
+            }
+        }
+
+        return null;
+    }
 
     fun connectToRemoteHost(
         hostAddress: InetSocketAddress,
@@ -148,7 +227,7 @@ class Host(
             "num channel invalid: $channelCount"
         }
         val currentPeer = Peer(channelCount)
-        currentPeer.state = PeerState.ENET_PEER_STATE_CONNECTING
+        currentPeer.state = ENetPeerState.ENET_PEER_STATE_CONNECTING
         currentPeer.address = hostAddress
         currentPeer.connectID = (++randomSeed).toUInt()
 
@@ -194,6 +273,13 @@ class Host(
     companion object {
         fun createNewHost(maximumPeers: Int, addressToBind: InetSocketAddress?, numChannelPerPeer: Int): Host {
             return Host(maximumPeers, numChannelPerPeer, addressToBind, 0, 0)
+        }
+
+        var timeStartServer = System.currentTimeMillis()
+
+
+        fun getTime(): UInt {
+            return (System.currentTimeMillis() - timeStartServer).toUInt()
         }
     }
 }

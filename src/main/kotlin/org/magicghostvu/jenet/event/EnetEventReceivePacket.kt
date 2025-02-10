@@ -1,4 +1,10 @@
 package org.magicghostvu.jenet.event
 
-class EnetEventReceivePacket : EnetEvent() {
+import java.net.InetSocketAddress
+
+class EnetEventReceivePacket(
+    override val address: InetSocketAddress,
+    val data: ByteArray,
+    val channelId: UByte,
+) : EnetEvent() {
 }

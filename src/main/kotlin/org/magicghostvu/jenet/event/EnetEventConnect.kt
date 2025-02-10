@@ -1,4 +1,6 @@
 package org.magicghostvu.jenet.event
 
-class EnetEventConnect: EnetEvent() {
+import java.net.InetSocketAddress
+
+class EnetEventConnect(override val address: InetSocketAddress, val eventData: UInt): EnetEvent() {
 }

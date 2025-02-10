@@ -1,6 +1,6 @@
 package org.magicghostvu.jenet
 
-enum class PeerState(val code: Int) {
+enum class ENetPeerState(val code: Int) {
     ENET_PEER_STATE_DISCONNECTED(0),
     ENET_PEER_STATE_CONNECTING(1),
     ENET_PEER_STATE_ACKNOWLEDGING_CONNECT(2),
@@ -14,7 +14,7 @@ enum class PeerState(val code: Int) {
     ;
 
     companion object {
-        private val t = PeerState.entries.associateBy(PeerState::code)
+        private val t = ENetPeerState.entries.associateBy(ENetPeerState::code)
         fun fromCode(code: Int) = t[code]
     }
 }

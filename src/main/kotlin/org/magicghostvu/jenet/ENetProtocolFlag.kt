@@ -10,4 +10,6 @@ object ENetProtocolFlag {
 
     val ENET_PROTOCOL_HEADER_SESSION_MASK = (3 shl 12)
     val ENET_PROTOCOL_HEADER_SESSION_SHIFT = 12
+
+    val ENET_PEER_FLAG_NEEDS_DISPATCH = 1 shl 0
 }
