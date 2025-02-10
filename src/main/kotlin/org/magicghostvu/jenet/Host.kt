@@ -1,13 +1,17 @@
 package org.magicghostvu.jenet
 
+import org.magicghostvu.jenet.event.EnetEvent
+import org.magicghostvu.jenet.protocol.ENetProtocol
 import org.magicghostvu.jenet.protocol.ENetProtocolCommand
+import org.magicghostvu.jenet.protocol.ENetProtocolCommandHeader
 import org.magicghostvu.jenet.protocol.ENetProtocolConnect
 import java.net.InetSocketAddress
+import java.util.LinkedList
 import kotlin.math.abs
 
 class Host(
     val maximumPeers: Int,
-    val numChannelPerPeer: Int,
+    val channelLimit: Int,
     val addressBind: InetSocketAddress?,
     val outgoingBandwidth: Int, //in case of server host, it should be 0 (un-limit)
     val incomingBandwidth: Int, //in case of server host, it should be 0 (un-limit)
@@ -21,7 +25,93 @@ class Host(
 
 
     // is this safe to increase it ??
+
+
+    var bandwidthThrottleEpoch: Int = 0;
+    var mtu: Int = EnetConstant.ENET_HOST_DEFAULT_MTU;
+
+
     var randomSeed: Int = abs(System.currentTimeMillis().toInt())
+
+    var recalculateBandwidthLimits: Int = 0;
+
+    var serviceTime: UInt = 0.toUInt();
+
+    val dispatchQueue: LinkedList<Any> = LinkedList()
+
+    var continueSending: Int = 0;
+
+    var packetSize: Long = 0;
+
+    var headerFlags: UShort = 0.toUShort();
+
+
+    // mảng chứa command cho host, maybe sử dụng list
+    val commands = Array<ENetProtocol>(ProtocolConstants.ENET_PROTOCOL_MAXIMUM_PACKET_COMMANDS) {
+        ENetProtocolCommandHeader()
+    }
+
+
+    var commandCount: Long = 0;
+
+
+    val buffers: Array<ENetBuffer> = Array(1 + 2 * ProtocolConstants.ENET_PROTOCOL_MAXIMUM_PACKET_COMMANDS) {
+        ENetBuffer.emptyBuffer
+    }
+
+
+    var bufferCount: Long = 0;
+
+    lateinit var checksum: (buffers: Array<ENetBuffer>, bufferCount: Long) -> Int
+
+
+    var compressor: ENetCompressor? = null
+
+    var packetData: Array<ByteArray> = Array(2) {
+        ByteArray(ProtocolConstants.ENET_PROTOCOL_MAXIMUM_MTU)
+    }
+
+    lateinit var receivedAddress: InetSocketAddress;
+
+    var receivedData = ByteArray(0)
+    var receivedDataLength: Long = 0;
+
+
+    /**< total data sent, user should reset to 0 as needed to prevent overflow */
+    var totalSentData: UInt = 0.toUInt();
+
+
+    /**< total UDP packets sent, user should reset to 0 as needed to prevent overflow */
+    var totalSentPackets: UInt = 0.toUInt();
+
+
+    /**< total data received, user should reset to 0 as needed to prevent overflow */
+    var totalReceivedData: UInt = 0.toUInt();
+
+
+    /**< total UDP packets received, user should reset to 0 as needed to prevent overflow */
+    var totalReceivedPackets: UInt = 0.toUInt();
+
+
+    lateinit var intercept: (host: Host, event: EnetEvent) -> Int;
+
+
+    // should refactor
+    var connectedPeers: UInt = 0.toUInt();
+
+
+    var bandwidthLimitedPeers: UInt = 0.toUInt();
+
+    /**< optional number of allowed peers from duplicate IPs, defaults to ENET_PROTOCOL_MAXIMUM_PEER_ID */
+    var duplicatePeers: UInt = 0.toUInt();
+
+
+    /**< the maximum allowable packet size that may be sent or received on a peer */
+    var maximumPacketSize: UInt = 0.toUInt();
+
+
+    /**< the maximum aggregate amount of buffer space a peer may use waiting for packets to be delivered */
+    var maximumWaitingData: UInt = 0.toUInt();
 
 
     fun findNewPeerId(): Int? {
@@ -35,9 +125,10 @@ class Host(
     }
 
     // enet host update
-    // blocking maximum
-    // should return list of event
-    fun update(timeoutReadMillis: Int) {
+    // blocking in timeoutReadMillis(maximum)
+    // name same as origin host_service(timeOut)
+    // but will return many events in a single update
+    fun hostService(timeoutReadMillis: Int): List<EnetEvent> {
         TODO()
     }
 
